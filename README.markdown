@@ -1,7 +1,7 @@
 github-backup
 =============
 
-Backs up all your GitHub repositories.
+Backs up all your public GitHub repositories.
 
 Usage:
 
