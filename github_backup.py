@@ -6,6 +6,8 @@ import os
 import subprocess
 import sys
 
+from http_utils import parse_link_header
+
 try:
     import urllib2
 except ImportError:
@@ -37,11 +39,19 @@ def git_installed():
     return True
 
 def user_repositories(user):
-    url = 'https://api.github.com/users/' + user + '/repos?per_page=100'
-    response = urllib2.urlopen(url).read().decode('utf-8')
-    repositories = json.loads(response)
-    for repository in repositories:
-        yield (repository['name'], repository['git_url'])
+    url = 'https://api.github.com/users/' + user + '/repos'
+    while url:
+        response = urllib2.urlopen(url)
+        repositories = json.loads(response.read().decode('utf-8'))
+        for repository in repositories:
+            yield (repository['name'], repository['git_url'])
+
+        link_header_value = response.info().getheader('Link')
+        if link_header_value:
+            links = parse_link_header(link_header_value)
+        else:
+            links = {}
+        url = links.get('next')
     
 def clone_repository(url, directory):
     subprocess.call(['git', 'clone', url, directory],
