@@ -37,7 +37,7 @@ def git_installed():
     return True
 
 def user_repositories(user):
-    url = 'https://api.github.com/users/' + user + '/repos'
+    url = 'https://api.github.com/users/' + user + '/repos?per_page=100'
     response = urllib2.urlopen(url).read().decode('utf-8')
     repositories = json.loads(response)
     for repository in repositories:
