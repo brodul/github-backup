@@ -6,28 +6,48 @@ import os
 import subprocess
 import sys
 
-from http_utils import parse_link_header
 
 try:
     import urllib2
 except ImportError:
     import urllib.request as urllib2
 
+
+def parse_link_header(value):
+    def parse_link(value):
+        url_value, relation_value = value.split('; ')
+
+        assert url_value[0] == '<'
+        assert url_value[-1] == '>'
+        url = url_value[1:-1]
+
+        assert relation_value.startswith('rel="')
+        assert relation_value.endswith('"')
+        relation = relation_value[5:-1]
+
+        return (relation, url)
+
+    return dict(map(parse_link, value.split(', ')))
+
+
 def setup_logger():
     logger = logging.getLogger('github_backup')
     logger.setLevel(logging.DEBUG)
-    
     stream_handler = logging.StreamHandler()
+
     stream_formatter = logging.Formatter('%(message)s')
     stream_handler.setFormatter(stream_formatter)
     logger.addHandler(stream_handler)
-    
+
     file_handler = logging.FileHandler('github_backup.log')
-    file_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    file_formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
     file_handler.setFormatter(file_formatter)
     logger.addHandler(file_handler)
-    
+
     return logger
+
 
 def git_installed():
     try:
@@ -37,6 +57,7 @@ def git_installed():
     except:
         return False
     return True
+
 
 def user_repositories(user):
     url = 'https://api.github.com/users/' + user + '/repos'
@@ -52,10 +73,12 @@ def user_repositories(user):
         else:
             links = {}
         url = links.get('next')
-    
+
+
 def clone_repository(url, directory):
     subprocess.call(['git', 'clone', url, directory],
                     stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
 
 def update_repository(directory):
     cwd = os.getcwd()
@@ -63,6 +86,7 @@ def update_repository(directory):
     subprocess.call(['git', 'fetch', 'origin'],
                     stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     os.chdir(cwd)
+
 
 def is_tracking_repository(directory, url):
     cwd = os.getcwd()
@@ -73,37 +97,40 @@ def is_tracking_repository(directory, url):
     os.chdir(cwd)
     return output.decode('utf-8').strip() == url
 
-logger = setup_logger()
+if __name__ == '__main__':
+    logger = setup_logger()
 
-if not git_installed():
-    logger.error('The git executable is missing.')
-    sys.exit(1)
+    if not git_installed():
+        logger.error('The git executable is missing.')
+        sys.exit(1)
 
-parser = argparse.ArgumentParser(description='Backs up all your public GitHub repositories.')
-parser.add_argument('user', type=str, help='your GitHub user name')
-parser.add_argument('root', type=str, help='the target directory')
-args = parser.parse_args()
-args.root = os.path.realpath(os.path.expanduser(args.root))
+    parser = argparse.ArgumentParser(
+        description='Backs up all your public GitHub repositories.'
+    )
+    parser.add_argument('user', type=str, help='your GitHub user name')
+    parser.add_argument('root', type=str, help='the target directory')
+    args = parser.parse_args()
+    args.root = os.path.realpath(os.path.expanduser(args.root))
 
-logger.info('Backing up to {0}...'.format(args.root))
+    logger.info('Backing up to {0}...'.format(args.root))
 
-if not os.path.exists(args.root):
-    os.makedirs(args.root)
+    if not os.path.exists(args.root):
+        os.makedirs(args.root)
 
-updates, clones = 0, 0
-for name, url in user_repositories(args.user):
-    directory = os.path.realpath(os.path.join(args.root, name))   
-    while (os.path.exists(directory)
-           and not is_tracking_repository(directory, url)):
-        directory += '_'
+    updates, clones = 0, 0
+    for name, url in user_repositories(args.user):
+        directory = os.path.realpath(os.path.join(args.root, name))
+        while (os.path.exists(directory)
+               and not is_tracking_repository(directory, url)):
+            directory += '_'
 
-    if os.path.exists(directory):
-        logger.info('Updating {0}...'.format(name))
-        update_repository(directory)
-        updates += 1
-    else:
-        logger.info('Cloning {0}...'.format(name))
-        clone_repository(url, directory)
-        clones += 1
-        
-logger.info('{0} new repositories, {1} updated.'.format(clones, updates))
+        if os.path.exists(directory):
+            logger.info('Updating {0}...'.format(name))
+            update_repository(directory)
+            updates += 1
+        else:
+            logger.info('Cloning {0}...'.format(name))
+            clone_repository(url, directory)
+            clones += 1
+
+    logger.info('{0} new repositories, {1} updated.'.format(clones, updates))
